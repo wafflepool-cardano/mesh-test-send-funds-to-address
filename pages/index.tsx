@@ -6,7 +6,7 @@ import {
     UTxO,
 } from '@meshsdk/core'
 import { useWallet, CardanoWallet } from '@meshsdk/react'
-import { queryUtxos, getUtxosWithMinLovelace, sendTx } from './utils'
+import { Tx } from './utils'
 
 const maestro = new MaestroProvider({
     network: 'Preprod',
@@ -20,6 +20,39 @@ const mesh = new MeshTxBuilder({
 })
 
 export default function Home() {
+    const tx = new Tx(mesh, maestro)
+
+    const queryUtxos = async (walletAddress: string) => {
+        if (!walletAddress) {
+            console.error('No wallet address provided')
+            return
+        }
+
+        const utxos = await maestro.fetchAddressUTxOs(walletAddress)
+        console.log(utxos)
+        return utxos
+    }
+
+    const getUtxosWithMinLovelace = async (
+        lovelace: number,
+        providedUtxos: UTxO[] = [],
+        wallet: string
+    ) => {
+        let utxos: UTxO[] = providedUtxos
+        if (!providedUtxos || providedUtxos.length === 0) {
+            utxos = await maestro.fetchAddressUTxOs(wallet)
+        }
+        const utxosMinLovelace = utxos.filter((utxo) => {
+            const lovelaceAmount = utxo.output.amount.find(
+                (a: any) => a.unit === 'lovelace'
+            )?.quantity
+            console.log(Number(lovelaceAmount) >= lovelace)
+            return Number(lovelaceAmount) >= lovelace
+        })
+        console.log(typeof utxosMinLovelace)
+        return utxosMinLovelace
+    }
+
     const { name, connecting, connected, wallet, connect, disconnect, error } =
         useWallet()
 
@@ -53,7 +86,7 @@ export default function Home() {
     }
 
     async function utxos() {
-        const utxos = await getUtxosWithMinLovelace(1000000, [], address)
+        const utxos = await getUtxosWithMinLovelace(100000000, [], address)
         console.log(utxos)
         setUtxosWithAda(utxos)
         setTxInHash(utxos[0]?.input.txHash)
@@ -74,17 +107,17 @@ export default function Home() {
         setInputAmountValue(e.target.value)
     }
     const handleSaveAmount = () => {
-        setSendAmount(inputAmountValue as number)
+        setSendAmount((inputAmountValue * 1000000) as number)
         console.log(inputAmountValue as number)
     }
 
     const sendFunds = async () => {
-        const signedTx = await sendTx(
+        const signedTx = await tx.sendTx(
             txInHash,
             txInIndex,
             addressToSend,
             address,
-            Number(sendAmount)
+            sendAmount.toString()
         )
         console.log(signedTx)
     }
